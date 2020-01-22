@@ -1,9 +1,10 @@
 const express = require('express');
 const db = require("./userDb");
+const postDb = require("../posts/postDb");
 
 const router = express.Router();
 
-router.post('/', (req, res) => {
+router.post('/', validateUser, (req, res) => {
   // do your magic!
   db.insert(req.body)
   .then(user => {
@@ -14,12 +15,23 @@ router.post('/', (req, res) => {
       }
   })
   .catch(err => {
-      res.status(500).json({ error: "There was an error while saving the post to the database", err })
+      res.status(500).json({ error: "There was an error while saving the user to the database", err })
   })
 });
 
-router.post('/:id/posts', (req, res) => {
+router.post('/:id/posts', validatePost, validateUserId, (req, res) => {
   // do your magic!
+  postDb.insert(req.text)
+    .then(post => {
+        if(req.body.text !== "") {
+            res.status(201).json(post)
+        } else {
+            res.status(400).json({ errorMessage: "Please provide text for post" })
+        }
+    })
+    .catch(err => {
+        res.status(500).json({ error: "There was an error while saving the post to the database", err })
+    })
 });
 
 router.get('/', (req, res) => {
@@ -33,7 +45,7 @@ router.get('/', (req, res) => {
     })
 });
 
-router.get('/:id', (req, res) => {
+router.get('/:id', validateUserId, (req, res) => {
   // do your magic!
   const id = req.params.id;
 
@@ -50,7 +62,7 @@ router.get('/:id', (req, res) => {
       })
 });
 
-router.get('/:id/posts', async(req, res) => {
+router.get('/:id/posts', validateUserId,  async(req, res) => {
   // do your magic!
   try {
     const post = await db.getUserPosts(req.params.id);
@@ -65,7 +77,7 @@ router.get('/:id/posts', async(req, res) => {
 }
 });
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', validateUserId, (req, res) => {
   // do your magic!
   const id = req.params.id; 
 
@@ -82,7 +94,7 @@ router.delete('/:id', (req, res) => {
       })
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', validateUserId, validateUser, (req, res) => {
   // do your magic!
   const changes = req.body;
   const id = req.params.id;
@@ -104,14 +116,40 @@ router.put('/:id', (req, res) => {
 
 function validateUserId(req, res, next) {
   // do your magic!
+  const {id} = req.params;
+
+  db.getById(id)
+    .then(user => {
+        if(user) {
+          req.user = user;
+          next();
+        } else {
+          res.status(400).json({ message: "invalid user id" })
+        }
+    })
+    .catch(err => {
+      res.status(500).json({message: "error getting user with this id", err})
+    })
 }
 
 function validateUser(req, res, next) {
   // do your magic!
+  if (!req.body.name) {
+    res.status(400).json({ message: "missing required name field" })
+  } else {
+    req.user = req.body.name;
+    next();
+  }
 }
 
 function validatePost(req, res, next) {
   // do your magic!
+  if (!req.body.text) {
+    res.status({ message: "missing required text field" })
+  } else {
+    req.text = req.body.text && req.params.id;
+    next();
+  }
 }
 
 module.exports = router;
